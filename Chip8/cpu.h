@@ -1,6 +1,14 @@
 #include <vector>
 #include "DataTypes.h"
 #include <array>
+#include "Gpu.h"
+#include <time.h>
+#include <cstdlib>
+#include <functional>
+#include <string>
+
+typedef void (Cpu::*opCode8Function)(BYTE x, BYTE y);
+typedef void (Cpu::*opCodeFFunction)(BYTE x);
 
 struct Instruction {
 	WORD instruction;
@@ -34,6 +42,10 @@ struct Instruction {
 	BYTE getSecondByte() const {
 		return instruction & 0xFF;
 	}
+	//returns BBCCDD
+	WORD getLastThreeHalfBytes() const {
+		return instruction & 0xFFF;
+	}
 };
 
 class Cpu {
@@ -48,9 +60,22 @@ private:
 
 	Instruction curr_instruction;
 
+	std::array<opCode8Function, 9> opcode8functions = {
+		&Cpu::_8xy0, &Cpu::_8xy1, &Cpu::_8xy2,
+		&Cpu::_8xy3, &Cpu::_8xy4, &Cpu::_8xy5,
+		&Cpu::_8xy6, &Cpu::_8xy7, &Cpu::_8xyE
+	};
+	std::array<opCodeFFunction, 9> opcodeFfunctions = {
+		&Cpu::_F, &Cpu::_8xy1, &Cpu::_8xy2,
+		&Cpu::_8xy3, &Cpu::_8xy4, &Cpu::_8xy5,
+		&Cpu::_8xy6, &Cpu::_8xy7, &Cpu::_8xyE
+	};
+
 	std::array<BYTE, 64> m_stack;
 
 	std::array<BYTE, 4096> m_ram;
+
+	Gpu m_gpu;
 
 	//@TODO(sawii): test the reading from memory
 
@@ -64,12 +89,152 @@ private:
 	//executes the fetched instructions
 	void execute(size_t n_steps) {
 		curr_instruction = Instruction(readWordFromRam(pc));
+
+		BYTE opCode = curr_instruction.getHalfByte1();
+
+		switch (opCode)
+		{
+		case 0x0:
+		{
+			if (curr_instruction.getSecondByte() == 0xE0)
+				_00E0();
+			else if (curr_instruction.getSecondByte() == 0xEE)
+				_00EE();
+			else
+				throw "Unknown OPCODE";
+			break;
+		}
+		case 0x1:
+		{
+			_1nnn(curr_instruction.getLastThreeHalfBytes());
+			break;
+		}
+		case 0x2:
+		{
+			_2nnn(curr_instruction.getLastThreeHalfBytes());
+			break;
+		}
+		case 0x3:
+		{
+			_3xnn(curr_instruction.getHalfByte2(), curr_instruction.getSecondByte());
+			break;
+		}
+		case 0x4:
+		{
+			_4xnn(curr_instruction.getHalfByte2(), curr_instruction.getSecondByte());
+			break;
+		}
+		case 0x5:
+		{
+			_5xy0(curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());
+			break;
+		}
+		case 0x6:
+		{
+			_6xnn(curr_instruction.getHalfByte2(), curr_instruction.getSecondByte());
+			break;
+		}
+		case 0x7:
+		{
+			_7xnn(curr_instruction.getHalfByte2(), curr_instruction.getSecondByte());
+			break;
+		}
+		case 0x8:
+		{
+			BYTE index = curr_instruction.getHalfByte4() == 0xE ? 8 : curr_instruction.getHalfByte4();
+			if (index >= 9)throw "Unknown Opcode";
+			std::invoke(opcode8functions[index],
+				curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());
+			break;
+		}
+		case 0x9:
+		{
+			_9xy0(curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());
+			break;
+		}
+		case 0xA:
+		{
+			_Annn(curr_instruction.getLastThreeHalfBytes());
+			break;
+		}
+		case 0xB:
+		{
+			_Bnnn(curr_instruction.getLastThreeHalfBytes());
+			break;
+		}
+		case 0xC:
+		{
+			_Cxnn(curr_instruction.getHalfByte2(), curr_instruction.getSecondByte());
+			break;
+		}
+		case 0xD:
+		{
+			_Dxyn(curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3(),
+				curr_instruction.getHalfByte4());
+			break;
+		}
+		case 0xE:
+		{
+			if (curr_instruction.getSecondByte() == 0x9E)
+			{
+				_Ex9E(curr_instruction.getHalfByte2());
+			}
+			else if (curr_instruction.getSecondByte() == 0xA1)
+			{
+				_ExA1(curr_instruction.getHalfByte2());
+			}
+			else
+				throw "Unknown OPCODE";
+
+			break;
+		}
+		case 0xF:
+		{
+			//NOTE(sawii00): room for optimization if necessary
+			BYTE secByte = curr_instruction.getSecondByte();
+			if (secByte == 0x7) {
+				_Fx07(curr_instruction.getHalfByte2());
+			}
+			else if (secByte == 0xA) {
+				_Fx0A(curr_instruction.getHalfByte2());
+			}
+			else if (secByte == 0x15) {
+				_Fx15(curr_instruction.getHalfByte2());
+			}
+			else if (secByte == 0x18) {
+				_Fx18(curr_instruction.getHalfByte2());
+			}
+			else if (secByte == 0x1E) {
+				_Fx1E(curr_instruction.getHalfByte2());
+			}
+			else if (secByte == 0x29) {
+				_Fx29(curr_instruction.getHalfByte2());
+			}
+			else if (secByte == 0x33) {
+				_Fx33(curr_instruction.getHalfByte2());
+			}
+			else if (secByte == 0x55) {
+				_Fx55(curr_instruction.getHalfByte2());
+			}
+			else if (secByte == 0x65) {
+				_Fx65(curr_instruction.getHalfByte2());
+			}
+			else
+				throw "Unknown OPCODE";
+
+			break;
+		}
+		default:
+			throw "Unknown OPCODE";
+		}
 	}
 
 public:
 
 	Cpu() {
 		reset();
+
+		srand(time(nullptr));
 
 		BYTE sprites[]{
 			0xF0, 0x90, 0x90, 0x90, 0xF0, //0
@@ -105,14 +270,9 @@ public:
 		sound_timer = 0;
 		pc = 0xC8;
 		sp = 0;
-		for (int i = 0; i < 64; i++)
-		{
-			m_stack[i] = 0;
-		}
-		for (int i = 0; i < 4096; i++)
-		{
-			m_ram[i] = 0;
-		}
+		m_ram.fill(0);
+		m_stack.fill(0);
+		m_gpu.BufferReset();
 	}
 	void start();
 	void stop();
@@ -133,10 +293,11 @@ public:
 
 	void _00E0() {
 		//clear the screen
+		m_gpu.BufferReset();
 		pc++;
 	}
 
-	void _00ET() {
+	void _00EE() {
 		//returns from subroutine
 		pc = m_stack[sp];
 		sp = !sp ? sp - 1 : 0; //if sp was 0 (should not occur) remains 0, else it decrements
@@ -220,5 +381,82 @@ public:
 	void _9xy0(BYTE x, BYTE y) {
 		if (V[x] != V[y])pc += 2;
 		else pc++;
+	}
+
+	void _Annn(WORD nnn) {
+		I = nnn;
+		pc++;
+	}
+
+	void _Bnnn(WORD nnn) {
+		pc = nnn + V[0];
+	}
+
+	void _Cxnn(BYTE x, BYTE nn) {
+		int r = rand() % 256;
+		V[x] = r & nn;
+		pc++;
+	}
+
+	void _Dxyn(BYTE x, BYTE y, BYTE n) {
+		V[0xF] = m_gpu.DrawSprite(x, y, m_ram.data() + I, n);
+		pc++;
+	}
+
+	void _Ex9E(BYTE x) {
+	}
+
+	void _ExA1(BYTE x) {
+	}
+
+	void _Fx07(BYTE x) {
+		V[x] = delay_timer;
+		pc++;
+	}
+
+	void _Fx0A(BYTE x) {
+	}
+
+	void _Fx15(BYTE x) {
+		delay_timer = V[x];
+		pc++;
+	}
+
+	void _Fx18(BYTE x) {
+		sound_timer = V[x];
+		pc++;
+	}
+
+	void _Fx1E(BYTE x) {
+		I = V[x];
+		pc++;
+	}
+
+	void _Fx29(BYTE x) {
+		I = 5 * V[x];
+		pc++;
+	}
+
+	void _Fx33(BYTE x) {
+		BYTE h = x / 100;
+		BYTE d = (x - h * 100) / 10;
+		m_ram[I] = h;
+		m_ram[I + 1] = d;
+		m_ram[I + 2] = x - 100 * h - 10 * d;
+	}
+
+	void _Fx55(BYTE x) {
+		for (int i = 0; i <= x; i++) {
+			m_ram[I + i] = V[i];
+		}
+
+		I = I + x + 1;
+	}
+
+	void _Fx65(BYTE x) {
+		for (int i = 0; i <= x; i++) {
+			V[i] = m_ram[I + i];
+		}
+		I = I + x + 1;
 	}
 };
