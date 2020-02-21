@@ -1,2 +1,9 @@
 ﻿  main.cpp
+c:\dev\c++\chip8\chip8\gpu.h(43): warning C4805: '^': unsafe mix of type 'BYTE' and type 'bool' in operation
+c:\dev\c++\chip8\chip8\cpu.h(251): warning C4244: 'argument': conversion from 'time_t' to 'unsigned int', possible loss of data
+c:\dev\c++\chip8\chip8\cpu.h(338): warning C4244: '=': conversion from 'WORD' to '_Ty', possible loss of data
+          with
+          [
+              _Ty=BYTE
+          ]
   Chip8.vcxproj -> C:\Dev\C++\Chip8\Debug\Chip8.exe

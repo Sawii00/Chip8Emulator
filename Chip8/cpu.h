@@ -1,14 +1,16 @@
+#include <fstream>
 #include <vector>
+
 #include "DataTypes.h"
 #include <array>
 #include "Gpu.h"
 #include <time.h>
 #include <cstdlib>
 #include <functional>
-#include <string>
+#include <SFML/Graphics.hpp>
+#include <thread>
 
-typedef void (Cpu::*opCode8Function)(BYTE x, BYTE y);
-typedef void (Cpu::*opCodeFFunction)(BYTE x);
+//typedef void (Cpu::*opCode8Function)(BYTE x, BYTE y);
 
 struct Instruction {
 	WORD instruction;
@@ -51,6 +53,9 @@ struct Instruction {
 class Cpu {
 private:
 
+	sf::RenderWindow m_window;
+	bool m_close = false;
+
 	std::array<BYTE, 16> V;
 	WORD I = 0x0000;
 	BYTE delay_timer = 0x00;
@@ -60,16 +65,11 @@ private:
 
 	Instruction curr_instruction;
 
-	std::array<opCode8Function, 9> opcode8functions = {
+	/*std::array<opCode8Function, 9> opcode8functions = {
 		&Cpu::_8xy0, &Cpu::_8xy1, &Cpu::_8xy2,
 		&Cpu::_8xy3, &Cpu::_8xy4, &Cpu::_8xy5,
 		&Cpu::_8xy6, &Cpu::_8xy7, &Cpu::_8xyE
-	};
-	std::array<opCodeFFunction, 9> opcodeFfunctions = {
-		&Cpu::_F, &Cpu::_8xy1, &Cpu::_8xy2,
-		&Cpu::_8xy3, &Cpu::_8xy4, &Cpu::_8xy5,
-		&Cpu::_8xy6, &Cpu::_8xy7, &Cpu::_8xyE
-	};
+	};*/
 
 	std::array<BYTE, 64> m_stack;
 
@@ -142,9 +142,9 @@ private:
 		case 0x8:
 		{
 			BYTE index = curr_instruction.getHalfByte4() == 0xE ? 8 : curr_instruction.getHalfByte4();
-			if (index >= 9)throw "Unknown Opcode";
+			/*if (index >= 9)throw "Unknown Opcode";
 			std::invoke(opcode8functions[index],
-				curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());
+				curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());*/
 			break;
 		}
 		case 0x9:
@@ -233,7 +233,21 @@ public:
 
 	Cpu() {
 		reset();
+	}
 
+	void reset() {
+		for (int i = 0; i < 16; i++)
+		{
+			V[i] = 0;
+		}
+		I = 0;
+		delay_timer = 0;
+		sound_timer = 0;
+		pc = 0xC8;
+		sp = 0;
+		m_ram.fill(0);
+		m_stack.fill(0);
+		m_gpu.BufferReset();
 		srand(time(nullptr));
 
 		BYTE sprites[]{
@@ -258,30 +272,43 @@ public:
 		for (int i = 0; i < 80; i++) {
 			m_ram[i] = sprites[i];
 		}
-	}
 
-	void reset() {
-		for (int i = 0; i < 16; i++)
-		{
-			V[i] = 0;
-		}
-		I = 0;
-		delay_timer = 0;
-		sound_timer = 0;
-		pc = 0xC8;
-		sp = 0;
-		m_ram.fill(0);
-		m_stack.fill(0);
-		m_gpu.BufferReset();
+		m_window.create(sf::VideoMode(1280, 640), "Chip8Emulator", sf::Style::None);
 	}
-	void start();
-	void stop();
+	void start() {
+		m_window.setActive(false);
+		std::thread render_thread(Gpu::rendering, &m_window);
+		// run the program as long as the window is open
+		while (m_window.isOpen())
+		{
+			// check all the window's events that were triggered since the last iteration of the loop
+			sf::Event event;
+			while (m_window.pollEvent(event))
+			{
+				// "close requested" event: we close the window
+				if (event.type == sf::Event::KeyPressed) {
+					if (event.key.code == sf::Keyboard::Escape) {
+						m_window.close();
+						render_thread.join(); //to release thread and avoid terminate error
+					}
+				}
+				if (m_close) {
+					m_window.close();
+					render_thread.join();
+				}
+			}
+		}
+	}
+	void stop() {
+		m_close = true;
+	}
 
 	void loadCartridge(const char* path) {
-		FILE *cartridge = fopen(path, "rb");
+		std::ifstream cartridge(path, std::ios::binary);
+
 		//0xDFF
-		fread(&m_ram[0x200], 1, 3544, cartridge);
-		fclose(cartridge);
+		cartridge.read((char*)m_ram.data() + 200, 3544);
+		cartridge.close();
 	}
 
 	//debugging
@@ -443,6 +470,7 @@ public:
 		m_ram[I] = h;
 		m_ram[I + 1] = d;
 		m_ram[I + 2] = x - 100 * h - 10 * d;
+		pc++;
 	}
 
 	void _Fx55(BYTE x) {
@@ -451,6 +479,7 @@ public:
 		}
 
 		I = I + x + 1;
+		pc++;
 	}
 
 	void _Fx65(BYTE x) {
@@ -458,5 +487,6 @@ public:
 			V[i] = m_ram[I + i];
 		}
 		I = I + x + 1;
+		pc++;
 	}
 };

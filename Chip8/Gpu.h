@@ -2,6 +2,7 @@
 
 #include "DataTypes.h"
 #include <array>
+#include <SFML/Graphics.hpp>
 
 class Gpu {
 private:
@@ -45,6 +46,17 @@ public:
 		}
 		return cvd;
 	}
+
+	static void rendering(sf::RenderWindow* window) {
+		window->setActive(true);
+
+		while (window->isOpen()) {
+			window->clear(sf::Color::Black);
+
+			window->display();
+		}
+	}
+
 	/*
 	void DrawSprite(int x, int y, BYTE *array, int size) {
 		int N = size / 8; //height of the sprite

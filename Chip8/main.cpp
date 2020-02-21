@@ -1,7 +1,9 @@
-#include <iostream>
-#include <SFML/Graphics.hpp>
+#include "cpu.h"
 
 int main() {
-	//pippo
+	Cpu cpu;
+
+	cpu.start();
+
 	return 0;
 }
