@@ -7,12 +7,20 @@
 class Gpu {
 private:
 
-	std::array<BYTE, 64 * 32> frame_buffer;
+	inline static std::array<BYTE, 64 * 32> frame_buffer;
 
+	inline static sf::Sprite basic_pixel;
 public:
 
 	Gpu() {
 		BufferReset();
+		sf::Texture p;
+		p.create(20, 20);
+
+		BYTE temp_arr[20 * 20 * 4];
+		memset(temp_arr, 255, sizeof(BYTE) * 20 * 20 * 4);
+		p.update(temp_arr);
+		Gpu::basic_pixel.setTexture(p);
 	}
 
 	bool GetPixel(BYTE x, BYTE y) {
@@ -33,7 +41,7 @@ public:
 	bool DrawSprite(BYTE x, BYTE y, BYTE *array, BYTE size) {
 		int N = size / 8; //height of the sprite
 		int index = 0;
-		bool _xor;
+		BYTE _xor;
 		bool cvd = 0;
 
 		for (int j = y; j < y + N; j++) {
@@ -52,6 +60,19 @@ public:
 
 		while (window->isOpen()) {
 			window->clear(sf::Color::Black);
+
+			for (int y = 0; y < 32; y++) {
+				for (int x = 0; x < 64; x++) {
+					Gpu::basic_pixel.setPosition(sf::Vector2f(x * 20, y * 20));
+					if (Gpu::frame_buffer[y * 64 + x]) {
+						Gpu::basic_pixel.setColor(sf::Color::White);
+					}
+					else {
+						Gpu::basic_pixel.setColor(sf::Color::Black);
+					}
+					window->draw(Gpu::basic_pixel);
+				}
+			}
 
 			window->display();
 		}
