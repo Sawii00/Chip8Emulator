@@ -10,7 +10,9 @@
 #include <SFML/Graphics.hpp>
 #include <thread>
 
-//typedef void (Cpu::*opCode8Function)(BYTE x, BYTE y);
+class Cpu;
+
+typedef void (Cpu::*opCode8Function)(BYTE x, BYTE y);
 
 struct Instruction {
 	WORD instruction;
@@ -55,6 +57,7 @@ private:
 
 	sf::RenderWindow m_window;
 	bool m_close = false;
+	BYTE m_keypressed;
 
 	std::array<BYTE, 16> V;
 	WORD I = 0x0000;
@@ -65,11 +68,11 @@ private:
 
 	Instruction curr_instruction;
 
-	/*std::array<opCode8Function, 9> opcode8functions = {
+	std::array<opCode8Function, 9> opcode8functions = {
 		&Cpu::_8xy0, &Cpu::_8xy1, &Cpu::_8xy2,
 		&Cpu::_8xy3, &Cpu::_8xy4, &Cpu::_8xy5,
 		&Cpu::_8xy6, &Cpu::_8xy7, &Cpu::_8xyE
-	};*/
+	};
 
 	std::array<BYTE, 64> m_stack;
 
@@ -142,9 +145,9 @@ private:
 		case 0x8:
 		{
 			BYTE index = curr_instruction.getHalfByte4() == 0xE ? 8 : curr_instruction.getHalfByte4();
-			/*if (index >= 9)throw "Unknown Opcode";
-			std::invoke(opcode8functions[index],
-				curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());*/
+			if (index >= 9)throw "Unknown Opcode";
+			//std::invoke(opcode8functions[index], curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());
+			//(opcode8functions[index])(curr_instruction.getHalfByte2, curr_instruction.getHalfByte3);
 			break;
 		}
 		case 0x9:
@@ -272,17 +275,18 @@ public:
 		for (int i = 0; i < 80; i++) {
 			m_ram[i] = sprites[i];
 		}
-
+		if (m_window.isOpen())
+			m_window.close();
 		m_window.create(sf::VideoMode(1280, 640), "Chip8Emulator", sf::Style::None);
 	}
 	void start() {
 		m_window.setActive(false);
 		std::thread render_thread(Gpu::rendering, &m_window);
 		// run the program as long as the window is open
+		sf::Event event;
 		while (m_window.isOpen())
 		{
 			// check all the window's events that were triggered since the last iteration of the loop
-			sf::Event event;
 			while (m_window.pollEvent(event))
 			{
 				// "close requested" event: we close the window
@@ -291,12 +295,24 @@ public:
 						m_window.close();
 						render_thread.join(); //to release thread and avoid terminate error
 					}
+
+					if (event.key.code >= 0 && event.key.code <= 5)
+						m_keypressed = event.key.code + 10;
+					else if (event.key.code >= 26 && event.key.code <= 35)
+						m_keypressed = event.key.code - 26;
+					else
+						m_keypressed = 0xFF;
+				}
+				else {
+					m_keypressed = 0xFF;
 				}
 				if (m_close) {
 					m_window.close();
 					render_thread.join();
 				}
 			}
+
+			execute(0);
 		}
 	}
 	void stop() {
@@ -310,6 +326,20 @@ public:
 		cartridge.read((char*)m_ram.data() + 200, 3544);
 		cartridge.close();
 	}
+
+	/*auto GetKeyValue() {
+		if (m_window.isOpen())
+		{
+			// check all the window's events that were triggered since the last iteration of the loop
+			sf::Event event1;
+			while (m_window.pollEvent(event1))
+			{
+				if (event1.type == sf::Event::KeyPressed) {
+					return event1.key.code;
+				}
+			}
+		}
+	}*/
 
 	//debugging
 	void step();
@@ -431,9 +461,15 @@ public:
 	}
 
 	void _Ex9E(BYTE x) {
+		if (m_keypressed == V[x]) {
+			pc += 2;
+		}
 	}
 
 	void _ExA1(BYTE x) {
+		if (m_keypressed != V[x]) {
+			pc += 2;
+		}
 	}
 
 	void _Fx07(BYTE x) {
@@ -442,6 +478,26 @@ public:
 	}
 
 	void _Fx0A(BYTE x) {
+		sf::Event event;
+		while (m_keypressed == 0xFF) {
+			while (m_window.pollEvent(event))
+			{
+				if (event.type == sf::Event::KeyPressed) {
+					if (event.key.code >= 0 && event.key.code <= 5)
+						m_keypressed = event.key.code + 10;
+					else if (event.key.code >= 26 && event.key.code <= 35)
+						m_keypressed = event.key.code - 26;
+					else
+						m_keypressed = 0xFF;
+				}
+				else {
+					m_keypressed = 0xFF;
+				}
+			}
+		}
+
+		V[x] = m_keypressed;
+		pc++;
 	}
 
 	void _Fx15(BYTE x) {
