@@ -1,6 +1,6 @@
 #include <fstream>
 #include <vector>
-
+#include <iostream>
 #include "DataTypes.h"
 #include <array>
 #include "Gpu.h"
@@ -57,13 +57,13 @@ private:
 
 	sf::RenderWindow m_window;
 	bool m_close = false;
-	BYTE m_keypressed;
+	BYTE m_keypressed = 0x00;
 
 	std::array<BYTE, 16> V;
 	WORD I = 0x0000;
 	BYTE delay_timer = 0x00;
 	BYTE sound_timer = 0x00;
-	WORD pc = 0xC8;
+	WORD pc = 0x200;
 	BYTE sp = 0x00;
 
 	Instruction curr_instruction;
@@ -80,13 +80,11 @@ private:
 
 	Gpu m_gpu;
 
-	//@TODO(sawii): test the reading from memory
-
 	BYTE readByteFromRam(WORD address) {
 		return m_ram[address];
 	}
 	WORD readWordFromRam(WORD address) {
-		return (m_ram[address++] << 8 & m_ram[address]);
+		return (m_ram[address++] << 8 | m_ram[address]);
 	}
 
 	//executes the fetched instructions
@@ -146,8 +144,8 @@ private:
 		{
 			BYTE index = curr_instruction.getHalfByte4() == 0xE ? 8 : curr_instruction.getHalfByte4();
 			if (index >= 9)throw "Unknown Opcode";
-			//std::invoke(opcode8functions[index], curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());
-			//(opcode8functions[index])(curr_instruction.getHalfByte2, curr_instruction.getHalfByte3);
+			//std::invoke(*opcode8functions[index], curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());
+			(this->*opcode8functions[index])(curr_instruction.getHalfByte2(), curr_instruction.getHalfByte3());
 			break;
 		}
 		case 0x9:
@@ -236,6 +234,8 @@ public:
 
 	Cpu() {
 		reset();
+
+		loadCartridge("test_program2.ch8");
 	}
 
 	void reset() {
@@ -246,7 +246,7 @@ public:
 		I = 0;
 		delay_timer = 0;
 		sound_timer = 0;
-		pc = 0xC8;
+		pc = 0x200;
 		sp = 0;
 		m_ram.fill(0);
 		m_stack.fill(0);
@@ -284,8 +284,12 @@ public:
 		std::thread render_thread(Gpu::rendering, &m_window);
 		// run the program as long as the window is open
 		sf::Event event;
+		sf::Clock clock;  //starts clock counting
+		DWORD accumulator = 0;
 		while (m_window.isOpen())
 		{
+			clock.restart();
+
 			// check all the window's events that were triggered since the last iteration of the loop
 			while (m_window.pollEvent(event))
 			{
@@ -312,7 +316,21 @@ public:
 				}
 			}
 
+			std::cout << m_keypressed << '\n';
+
 			execute(0);
+			sf::Time finish_time = clock.getElapsedTime();  //finishes clock counting
+			accumulator += finish_time.asMilliseconds(); //gets the time in milliseconds
+
+			while (accumulator >= 17) {
+				if (delay_timer > 0)
+					delay_timer--;
+				if (sound_timer > 1) {
+					sound_timer--;
+					//@TODO: SOUND SYSTEM
+				}
+				accumulator -= 17;
+			}
 		}
 	}
 	void stop() {
@@ -323,7 +341,7 @@ public:
 		std::ifstream cartridge(path, std::ios::binary);
 
 		//0xDFF
-		cartridge.read((char*)m_ram.data() + 200, 3544);
+		cartridge.read((char*)m_ram.data() + 0x200, 3544);
 		cartridge.close();
 	}
 
@@ -351,7 +369,7 @@ public:
 	void _00E0() {
 		//clear the screen
 		m_gpu.BufferReset();
-		pc++;
+		pc += 2;
 	}
 
 	void _00EE() {
@@ -369,25 +387,25 @@ public:
 		pc = address;
 	}
 	void _3xnn(BYTE x, BYTE nn) {
-		if (V[x] == nn)pc += 2;
-		else pc++;
+		if (V[x] == nn)pc += 4;
+		else pc += 2;
 	}
 	void _4xnn(BYTE x, BYTE nn) {
-		if (V[x] != nn)pc += 2;
-		else pc++;
+		if (V[x] != nn)pc += 4;
+		else pc += 2;
 	}
 	void _5xy0(BYTE x, BYTE y) {
-		if (V[x] == V[y])pc += 2;
-		else pc++;
+		if (V[x] == V[y])pc += 4;
+		else pc += 2;
 	}
 
 	void _6xnn(BYTE x, BYTE nn) {
 		V[x] = nn;
-		pc++;
+		pc += 2;
 	}
 	void _7xnn(BYTE x, BYTE nn) {
 		V[x] += nn;
-		pc++;
+		pc += 2;
 	}
 
 	void _8xy0(BYTE x, BYTE y) {
@@ -396,53 +414,53 @@ public:
 	}
 	void _8xy1(BYTE x, BYTE y) {
 		V[x] |= V[y];
-		pc++;
+		pc += 2;
 	}
 	void _8xy2(BYTE x, BYTE y) {
 		V[x] &= V[y];
-		pc++;
+		pc += 2;
 	}
 	void _8xy3(BYTE x, BYTE y) {
 		V[x] ^= V[y];
-		pc++;
+		pc += 2;
 	}
 	void _8xy4(BYTE x, BYTE y) {
 		WORD res = V[x] + V[y];
 		V[0xF] = res > 255 ? 1 : 0;
 		V[x] = res & 0xFF;
-		pc++;
+		pc += 2;
 	}
 	void _8xy5(BYTE x, BYTE y) {
 		BYTE res = V[x] - V[y];
 		V[0xF] = res < 0 ? 0 : 1;
 		V[x] = res;
-		pc++;
+		pc += 2;
 	}
 	void _8xy6(BYTE x, BYTE y) {
 		V[0xF] = V[y] & 0x1; // least significant bit
 		V[x] = V[y] >> 0x1;
-		pc++;
+		pc += 2;
 	}
 	void _8xy7(BYTE x, BYTE y) {
 		BYTE res = V[y] - V[x];
 		V[0xF] = res < 0 ? 0 : 1;
 		V[x] = res;
-		pc++;
+		pc += 2;
 	}
 	void _8xyE(BYTE x, BYTE y) {
 		V[0xF] = V[y] & 0x80; //most significant bit
 		V[x] = V[y] << 0x1;
-		pc++;
+		pc += 2;
 	}
 
 	void _9xy0(BYTE x, BYTE y) {
 		if (V[x] != V[y])pc += 2;
-		else pc++;
+		else pc += 2;
 	}
 
 	void _Annn(WORD nnn) {
 		I = nnn;
-		pc++;
+		pc += 2;
 	}
 
 	void _Bnnn(WORD nnn) {
@@ -452,12 +470,12 @@ public:
 	void _Cxnn(BYTE x, BYTE nn) {
 		int r = rand() % 256;
 		V[x] = r & nn;
-		pc++;
+		pc += 2;
 	}
 
 	void _Dxyn(BYTE x, BYTE y, BYTE n) {
-		V[0xF] = m_gpu.DrawSprite(x, y, m_ram.data() + I, n);
-		pc++;
+		V[0xF] = m_gpu.DrawSprite(V[x], V[y], m_ram.data() + I, n);
+		pc += 2;
 	}
 
 	void _Ex9E(BYTE x) {
@@ -474,11 +492,11 @@ public:
 
 	void _Fx07(BYTE x) {
 		V[x] = delay_timer;
-		pc++;
+		pc += 2;
 	}
 
 	void _Fx0A(BYTE x) {
-		sf::Event event;
+		/*sf::Event event;
 		while (m_keypressed == 0xFF) {
 			while (m_window.pollEvent(event))
 			{
@@ -494,30 +512,31 @@ public:
 					m_keypressed = 0xFF;
 				}
 			}
+		}*/
+		if (m_keypressed != 0xFF) {
+			V[x] = m_keypressed;
+			pc += 2;
 		}
-
-		V[x] = m_keypressed;
-		pc++;
 	}
 
 	void _Fx15(BYTE x) {
 		delay_timer = V[x];
-		pc++;
+		pc += 2;
 	}
 
 	void _Fx18(BYTE x) {
 		sound_timer = V[x];
-		pc++;
+		pc += 2;
 	}
 
 	void _Fx1E(BYTE x) {
 		I = V[x];
-		pc++;
+		pc += 2;
 	}
 
 	void _Fx29(BYTE x) {
 		I = 5 * V[x];
-		pc++;
+		pc += 2;
 	}
 
 	void _Fx33(BYTE x) {
@@ -526,7 +545,7 @@ public:
 		m_ram[I] = h;
 		m_ram[I + 1] = d;
 		m_ram[I + 2] = x - 100 * h - 10 * d;
-		pc++;
+		pc += 2;
 	}
 
 	void _Fx55(BYTE x) {
@@ -535,7 +554,7 @@ public:
 		}
 
 		I = I + x + 1;
-		pc++;
+		pc += 2;
 	}
 
 	void _Fx65(BYTE x) {
@@ -543,6 +562,6 @@ public:
 			V[i] = m_ram[I + i];
 		}
 		I = I + x + 1;
-		pc++;
+		pc += 2;
 	}
 };

@@ -24,7 +24,7 @@ public:
 	}
 
 	bool GetPixel(BYTE x, BYTE y) {
-		return frame_buffer[y * 64 + x];
+		return frame_buffer[(y % 32) * 64 + x % 64];
 	}
 
 	//reset frame buffer
@@ -38,9 +38,10 @@ public:
 	}
 
 	//ingresso un array di byte e la sua dim.
-	bool DrawSprite(BYTE x, BYTE y, BYTE *array, BYTE size) {
-		int N = size / 8; //height of the sprite
-		int index = 0;
+	bool DrawSprite(BYTE x, BYTE y, BYTE *array, BYTE N) {
+		//int N = size / 8; //height of the sprite
+
+		/*int index = 0;
 		BYTE _xor;
 		bool cvd = 0;
 
@@ -52,7 +53,23 @@ public:
 				index++;
 			}
 		}
-		return cvd;
+		return cvd;*/
+		bool collision = false;
+		bool ret = false;
+		BYTE new_pixel;
+		BYTE row;
+		for (int i = 0; i < N; i++) {
+			row = array[i];
+			for (int j = 7; j >= 0; j--) {
+				collision = GetPixel(x + 7 - j, y + i);
+				new_pixel = (row >> j) & 0x1;
+				if (collision == 1 && new_pixel == 1 && !ret)
+					ret = true;
+
+				PixelSet((x + 7 - j) % 64, (y + i) % 32, collision ^ new_pixel);
+			}
+		}
+		return ret;
 	}
 
 	static void rendering(sf::RenderWindow* window) {
