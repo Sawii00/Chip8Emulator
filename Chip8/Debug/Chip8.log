@@ -6,9 +6,4 @@ c:\dev\c++\chip8\chip8\gpu.h(83): warning C4244: 'argument': conversion from 'in
               T=float
           ]
 c:\dev\c++\chip8\chip8\cpu.h(254): warning C4244: 'argument': conversion from 'time_t' to 'unsigned int', possible loss of data
-c:\dev\c++\chip8\chip8\cpu.h(386): warning C4244: '=': conversion from 'WORD' to '_Ty', possible loss of data
-          with
-          [
-              _Ty=BYTE
-          ]
   Chip8.vcxproj -> C:\Dev\C++\Chip8\Debug\Chip8.exe

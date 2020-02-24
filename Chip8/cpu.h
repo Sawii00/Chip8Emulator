@@ -74,7 +74,7 @@ private:
 		&Cpu::_8xy6, &Cpu::_8xy7, &Cpu::_8xyE
 	};
 
-	std::array<BYTE, 64> m_stack;
+	std::array<WORD, 64> m_stack;
 
 	std::array<BYTE, 4096> m_ram;
 
@@ -235,7 +235,7 @@ public:
 	Cpu() {
 		reset();
 
-		loadCartridge("test_program2.ch8");
+		loadCartridge("test_program7.ch8");
 	}
 
 	void reset() {
@@ -374,8 +374,9 @@ public:
 
 	void _00EE() {
 		//returns from subroutine
-		pc = m_stack[sp];
-		sp = !sp ? sp - 1 : 0; //if sp was 0 (should not occur) remains 0, else it decrements
+		if (sp) {
+			pc = m_stack[--sp];
+		}
 	}
 	void _1nnn(WORD address) {
 		//jumps to address
@@ -410,7 +411,7 @@ public:
 
 	void _8xy0(BYTE x, BYTE y) {
 		V[x] = V[y];
-		pc++;
+		pc += 2;
 	}
 	void _8xy1(BYTE x, BYTE y) {
 		V[x] |= V[y];
