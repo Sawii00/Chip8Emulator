@@ -3,6 +3,7 @@
 #include "DataTypes.h"
 #include <array>
 #include <SFML/Graphics.hpp>
+#include <string>
 
 class Gpu {
 private:
@@ -39,34 +40,19 @@ public:
 
 	//ingresso un array di byte e la sua dim.
 	bool DrawSprite(BYTE x, BYTE y, BYTE *array, BYTE N) {
-		//int N = size / 8; //height of the sprite
-
-		/*int index = 0;
-		BYTE _xor;
-		bool cvd = 0;
-
-		for (int j = y; j < y + N; j++) {
-			for (int i = x; i < x + 8; i++) {
-				_xor = GetPixel(i, j);
-				if (_xor == 1 && array[index] == 1) { cvd = 1; }
-				PixelSet(i % 64, j % 32, array[index] ^ _xor);
-				index++;
-			}
-		}
-		return cvd;*/
-		bool collision = false;
+		bool old_pixel = false;
 		bool ret = false;
 		BYTE new_pixel;
 		BYTE row;
 		for (int i = 0; i < N; i++) {
 			row = array[i];
 			for (int j = 7; j >= 0; j--) {
-				collision = GetPixel(x + 7 - j, y + i);
+				old_pixel = GetPixel(x + 7 - j, y + i);
 				new_pixel = (row >> j) & 0x1;
-				if (collision == 1 && new_pixel == 1 && !ret)
+				if (old_pixel == 1 && new_pixel == 1 && !ret)
 					ret = true;
 
-				PixelSet((x + 7 - j) % 64, (y + i) % 32, collision ^ new_pixel);
+				PixelSet((x + 7 - j) % 64, (y + i) % 32, old_pixel ^ new_pixel);
 			}
 		}
 		return ret;

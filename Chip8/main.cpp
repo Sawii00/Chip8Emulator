@@ -3,7 +3,6 @@
 /*
 	@TODO:
 	- test keyboard
-	- fix issue opcode F
 	- add sounds
 
 */
